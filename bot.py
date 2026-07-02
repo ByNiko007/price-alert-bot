@@ -48,17 +48,17 @@ async def get_crypto_prices() -> dict:
 
 
 async def get_stock_prices() -> dict:
+    api_key = os.environ.get("FMP_API_KEY", "")
     result = {}
-    url = "https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey=demo"
     async with aiohttp.ClientSession() as session:
         for symbol in STOCKS.keys():
             try:
-                link = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey=demo"
-                async with session.get(link, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey={api_key}"
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
                     data = await resp.json()
                     if data and len(data) > 0:
                         result[symbol] = data[0]["price"]
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
             except Exception as e:
                 logger.error(f"{symbol} xəta: {e}")
     return result
