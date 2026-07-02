@@ -41,22 +41,24 @@ last_stock_prices = {}
 
 
 async def get_crypto_prices() -> dict:
-    symbols = {
-        "bitcoin": "BTCUSDT",
-        "ethereum": "ETHUSDT",
-        "solana": "SOLUSDT",
-        "binancecoin": "BNBUSDT",
-    }
+    url = "https://api.coincap.io/v2/assets?ids=bitcoin,ethereum,solana,binance-coin"
     result = {}
-    async with aiohttp.ClientSession() as session:
-        for coin_id, symbol in symbols.items():
-            try:
-                url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    data = await resp.json()
-                    result[coin_id] = {"usd": float(data["price"])}
-            except Exception as e:
-                logger.error(f"{coin_id} xəta: {e}")
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                data = await resp.json()
+                id_map = {
+                    "bitcoin": "bitcoin",
+                    "ethereum": "ethereum", 
+                    "solana": "solana",
+                    "binance-coin": "binancecoin",
+                }
+                for asset in data["data"]:
+                    coin_id = id_map.get(asset["id"])
+                    if coin_id:
+                        result[coin_id] = {"usd": float(asset["priceUsd"])}
+    except Exception as e:
+        logger.error(f"CoinCap xəta: {e}")
     return result
 
 
