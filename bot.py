@@ -41,24 +41,25 @@ last_stock_prices = {}
 
 
 async def get_crypto_prices() -> dict:
-    url = "https://api.coincap.io/v2/assets?ids=bitcoin,ethereum,solana,binance-coin"
+    crypto_symbols = {
+        "bitcoin": "BTC/USD",
+        "ethereum": "ETH/USD",
+        "solana": "SOL/USD",
+        "binancecoin": "BNB/USD",
+    }
     result = {}
+    symbols = ",".join(crypto_symbols.values())
+    url = f"https://api.twelvedata.com/price?symbol={symbols}&apikey={TWELVE_API_KEY}"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 data = await resp.json()
-                id_map = {
-                    "bitcoin": "bitcoin",
-                    "ethereum": "ethereum", 
-                    "solana": "solana",
-                    "binance-coin": "binancecoin",
-                }
-                for asset in data["data"]:
-                    coin_id = id_map.get(asset["id"])
-                    if coin_id:
-                        result[coin_id] = {"usd": float(asset["priceUsd"])}
+                for coin_id, symbol in crypto_symbols.items():
+                    if symbol in data and "price" in data[symbol]:
+                        result[coin_id] = {"usd": float(data[symbol]["price"])}
+                        logger.info(f"{coin_id}: ${float(data[symbol]['price']):,.2f}")
     except Exception as e:
-        logger.error(f"CoinCap xəta: {e}")
+        logger.error(f"Kripto xəta: {e}")
     return result
 
 
