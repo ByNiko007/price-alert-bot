@@ -48,16 +48,20 @@ async def get_crypto_prices() -> dict:
 
 
 async def get_stock_prices() -> dict:
-    symbols = ",".join(STOCKS.keys())
-    url = f"https://query2.finance.yahoo.com/v8/finance/quote?symbols={symbols}"
-    headers = {"User-Agent": "Mozilla/5.0"}
+    result = {}
+    url = "https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey=demo"
     async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-            data = await resp.json()
-            result = {}
-            for item in data["quoteResponse"]["result"]:
-                result[item["symbol"]] = item["regularMarketPrice"]
-            return result
+        for symbol in STOCKS.keys():
+            try:
+                link = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey=demo"
+                async with session.get(link, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                    data = await resp.json()
+                    if data and len(data) > 0:
+                        result[symbol] = data[0]["price"]
+                await asyncio.sleep(1)
+            except Exception as e:
+                logger.error(f"{symbol} xəta: {e}")
+    return result
 
 
 async def check_crypto(bot: Bot):
