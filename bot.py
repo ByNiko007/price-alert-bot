@@ -49,7 +49,7 @@ async def get_crypto_prices() -> dict:
 
 async def get_stock_prices() -> dict:
     symbols = ",".join(STOCKS.keys())
-    url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols}"
+    url = f"https://query2.finance.yahoo.com/v8/finance/quote?symbols={symbols}"
     headers = {"User-Agent": "Mozilla/5.0"}
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
