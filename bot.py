@@ -73,13 +73,19 @@ async def check_crypto(bot: Bot):
     global last_crypto_prices
     try:
         data = await get_crypto_prices()
+        if not data:
+            logger.warning("Boş cavab, keçilir...")
+            return
         for coin_id, info in COINS.items():
+            if coin_id not in data:
+                continue
             current = data[coin_id]["usd"]
             if coin_id not in last_crypto_prices:
                 last_crypto_prices[coin_id] = current
                 logger.info(f"{info['name']}: ${current:,.2f}")
                 continue
             diff = current - last_crypto_prices[coin_id]
+            logger.info(f"{info['name']}: ${current:,.2f} (fərq: ${diff:+,.2f})")
             if abs(diff) >= info["threshold"]:
                 direction = "🚀 YUXARI" if diff > 0 else "📉 AŞAĞI"
                 msg = (
