@@ -43,8 +43,13 @@ last_stock_prices = {}
 async def get_crypto_prices() -> dict:
     ids = ",".join(COINS.keys())
     url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
+    headers = {"User-Agent": "Mozilla/5.0"}
     async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            if resp.status == 429:
+                logger.warning("CoinGecko rate limit, 60s gözlənilir...")
+                await asyncio.sleep(120)
+                return {}
             return await resp.json()
 
 
