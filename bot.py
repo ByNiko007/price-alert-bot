@@ -13,42 +13,105 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 CHAT_ID = os.environ.get("CHAT_ID", "")
-THRESHOLD = 1000
-last_price = None
+
+COINS = {
+    "bitcoin": {"name": "Bitcoin", "symbol": "BTC", "threshold": 1000},
+    "ethereum": {"name": "Ethereum", "symbol": "ETH", "threshold": 100},
+    "solana": {"name": "Solana", "symbol": "SOL", "threshold": 10},
+    "binancecoin": {"name": "BNB", "symbol": "BNB", "threshold": 10},
+}
+
+STOCKS = {
+    "AAPL": {"name": "Apple", "threshold": 10},
+    "MSFT": {"name": "Microsoft", "threshold": 15},
+    "NVDA": {"name": "Nvidia", "threshold": 15},
+    "AMZN": {"name": "Amazon", "threshold": 10},
+    "GOOGL": {"name": "Google", "threshold": 10},
+    "META": {"name": "Meta", "threshold": 15},
+    "TSLA": {"name": "Tesla", "threshold": 15},
+    "BRK-B": {"name": "Berkshire Hathaway", "threshold": 5},
+    "JPM": {"name": "JP Morgan", "threshold": 10},
+    "SPCX": {"name": "SpaceX", "threshold": 10},
+    "MU": {"name": "Micron", "threshold": 5},
+}
+
+last_crypto_prices = {}
+last_stock_prices = {}
 
 
-async def get_price() -> float:
-    url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
+async def get_crypto_prices() -> dict:
+    ids = ",".join(COINS.keys())
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={ids}&vs_currencies=usd"
     async with aiohttp.ClientSession() as session:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            return await resp.json()
+
+
+async def get_stock_prices() -> dict:
+    symbols = ",".join(STOCKS.keys())
+    url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as resp:
             data = await resp.json()
-            return data["bitcoin"]["usd"]
+            result = {}
+            for item in data["quoteResponse"]["result"]:
+                result[item["symbol"]] = item["regularMarketPrice"]
+            return result
 
 
-async def check_price(bot: Bot):
-    global last_price
+async def check_crypto(bot: Bot):
+    global last_crypto_prices
     try:
-        current = await get_price()
-        if last_price is None:
-            last_price = current
-            logger.info(f"Başlanğıc qiymət: ${current:,.0f}")
-            return
-
-        diff = current - last_price
-        if abs(diff) >= THRESHOLD:
-            direction = "🚀 YUXARI" if diff > 0 else "📉 AŞAĞI"
-            msg = (
-                f"⚠️ <b>Bitcoin Qiymət Alerti!</b>\n\n"
-                f"{direction}\n"
-                f"💰 Cari qiymət: <b>${current:,.0f}</b>\n"
-                f"📊 Dəyişiklik: <b>${diff:+,.0f}</b>\n\n"
-                f"#Bitcoin #BTC #Alert"
-            )
-            await bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode="HTML")
-            logger.info(f"Alert! ${last_price:,.0f} → ${current:,.0f}")
-            last_price = current
+        data = await get_crypto_prices()
+        for coin_id, info in COINS.items():
+            current = data[coin_id]["usd"]
+            if coin_id not in last_crypto_prices:
+                last_crypto_prices[coin_id] = current
+                logger.info(f"{info['name']}: ${current:,.2f}")
+                continue
+            diff = current - last_crypto_prices[coin_id]
+            if abs(diff) >= info["threshold"]:
+                direction = "🚀 YUXARI" if diff > 0 else "📉 AŞAĞI"
+                msg = (
+                    f"⚠️ <b>{info['name']} Alerti!</b>\n\n"
+                    f"{direction}\n"
+                    f"💰 Qiymət: <b>${current:,.2f}</b>\n"
+                    f"📊 Dəyişiklik: <b>${diff:+,.2f}</b>\n\n"
+                    f"#{info['symbol']} #Kripto #Alert"
+                )
+                await bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode="HTML")
+                last_crypto_prices[coin_id] = current
     except Exception as e:
-        logger.error(f"Xəta: {e}")
+        logger.error(f"Kripto xəta: {e}")
+
+
+async def check_stocks(bot: Bot):
+    global last_stock_prices
+    try:
+        data = await get_stock_prices()
+        for symbol, info in STOCKS.items():
+            if symbol not in data:
+                continue
+            current = data[symbol]
+            if symbol not in last_stock_prices:
+                last_stock_prices[symbol] = current
+                logger.info(f"{info['name']} ({symbol}): ${current:,.2f}")
+                continue
+            diff = current - last_stock_prices[symbol]
+            if abs(diff) >= info["threshold"]:
+                direction = "🚀 YUXARI" if diff > 0 else "📉 AŞAĞI"
+                msg = (
+                    f"⚠️ <b>{info['name']} ({symbol}) Alerti!</b>\n\n"
+                    f"{direction}\n"
+                    f"💰 Qiymət: <b>${current:,.2f}</b>\n"
+                    f"📊 Dəyişiklik: <b>${diff:+,.2f}</b>\n\n"
+                    f"#{symbol} #Səhm #Alert"
+                )
+                await bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode="HTML")
+                last_stock_prices[symbol] = current
+    except Exception as e:
+        logger.error(f"Səhm xəta: {e}")
 
 
 async def health(request):
@@ -68,8 +131,9 @@ async def main():
     await site.start()
 
     while True:
-        await check_price(bot)
-        await asyncio.sleep(60)  # Hər dəqiqə yoxla
+        await check_crypto(bot)
+        await check_stocks(bot)
+        await asyncio.sleep(60)
 
 
 if __name__ == "__main__":
