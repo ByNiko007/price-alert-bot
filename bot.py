@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 CHAT_ID = os.environ.get("CHAT_ID", "")
+TWELVE_API_KEY = os.environ.get("TWELVE_API_KEY", "")
 
 COINS = {
     "bitcoin": {"name": "Bitcoin", "symbol": "BTC", "threshold": 1000},
@@ -29,7 +30,7 @@ STOCKS = {
     "GOOGL": {"name": "Google", "threshold": 10},
     "META": {"name": "Meta", "threshold": 15},
     "TSLA": {"name": "Tesla", "threshold": 15},
-    "BRK-B": {"name": "Berkshire Hathaway", "threshold": 5},
+    "BRK/B": {"name": "Berkshire Hathaway", "threshold": 5},
     "JPM": {"name": "JP Morgan", "threshold": 10},
     "SPCX": {"name": "SpaceX", "threshold": 10},
     "MU": {"name": "Micron", "threshold": 5},
@@ -48,19 +49,18 @@ async def get_crypto_prices() -> dict:
 
 
 async def get_stock_prices() -> dict:
-    api_key = os.environ.get("FMP_API_KEY", "")
+    symbols = ",".join(STOCKS.keys())
+    url = f"https://api.twelvedata.com/price?symbol={symbols}&apikey={TWELVE_API_KEY}"
     result = {}
     async with aiohttp.ClientSession() as session:
-        for symbol in STOCKS.keys():
-            try:
-                url = f"https://financialmodelingprep.com/api/v3/quote/{symbol}?apikey={api_key}"
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                    data = await resp.json()
-                    if data and len(data) > 0:
-                        result[symbol] = data[0]["price"]
-                await asyncio.sleep(0.5)
-            except Exception as e:
-                logger.error(f"{symbol} xəta: {e}")
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            data = await resp.json()
+            for symbol in STOCKS.keys():
+                try:
+                    if symbol in data and "price" in data[symbol]:
+                        result[symbol] = float(data[symbol]["price"])
+                except Exception as e:
+                    logger.error(f"{symbol} xəta: {e}")
     return result
 
 
