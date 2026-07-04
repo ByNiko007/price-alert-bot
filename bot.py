@@ -17,10 +17,10 @@ CHAT_ID = os.environ.get("CHAT_ID", "")
 TWELVE_API_KEY = os.environ.get("TWELVE_API_KEY", "")
 
 COINS = {
-    "bitcoin": {"name": "Bitcoin", "symbol": "BTC/USD", "threshold": 500},
-    "ethereum": {"name": "Ethereum", "symbol": "ETH/USD", "threshold": 50},
-    "solana": {"name": "Solana", "symbol": "SOL/USD", "threshold": 5},
-    "binancecoin": {"name": "BNB", "symbol": "BNB/USD", "threshold": 5},
+    "bitcoin": {"name": "Bitcoin", "symbol": "BTC/USD", "threshold": 50},
+    "ethereum": {"name": "Ethereum", "symbol": "ETH/USD", "threshold": 10},
+    "solana": {"name": "Solana", "symbol": "SOL/USD", "threshold": 1},
+    "binancecoin": {"name": "BNB", "symbol": "BNB/USD", "threshold": 1},
 }
 
 STOCKS = {
