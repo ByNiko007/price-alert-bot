@@ -4,6 +4,7 @@ import os
 import aiohttp
 from aiohttp import web
 from telegram import Bot
+from chart import generate_chart
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
@@ -16,10 +17,10 @@ CHAT_ID = os.environ.get("CHAT_ID", "")
 TWELVE_API_KEY = os.environ.get("TWELVE_API_KEY", "")
 
 COINS = {
-    "bitcoin": {"name": "Bitcoin", "symbol": "BTC", "threshold": 50},
-    "ethereum": {"name": "Ethereum", "symbol": "ETH", "threshold": 10},
-    "solana": {"name": "Solana", "symbol": "SOL", "threshold": 1},
-    "binancecoin": {"name": "BNB", "symbol": "BNB", "threshold": 1},
+    "bitcoin": {"name": "Bitcoin", "symbol": "BTC/USD", "threshold": 500},
+    "ethereum": {"name": "Ethereum", "symbol": "ETH/USD", "threshold": 50},
+    "solana": {"name": "Solana", "symbol": "SOL/USD", "threshold": 5},
+    "binancecoin": {"name": "BNB", "symbol": "BNB/USD", "threshold": 5},
 }
 
 STOCKS = {
@@ -41,20 +42,15 @@ last_stock_prices = {}
 
 
 async def get_crypto_prices() -> dict:
-    crypto_symbols = {
-        "bitcoin": "BTC/USD",
-        "ethereum": "ETH/USD",
-        "solana": "SOL/USD",
-        "binancecoin": "BNB/USD",
-    }
-    result = {}
-    symbols = ",".join(crypto_symbols.values())
+    symbols = ",".join([info["symbol"] for info in COINS.values()])
     url = f"https://api.twelvedata.com/price?symbol={symbols}&apikey={TWELVE_API_KEY}"
+    result = {}
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
                 data = await resp.json()
-                for coin_id, symbol in crypto_symbols.items():
+                for coin_id, info in COINS.items():
+                    symbol = info["symbol"]
                     if symbol in data and "price" in data[symbol]:
                         result[coin_id] = {"usd": float(data[symbol]["price"])}
                         logger.info(f"{coin_id}: ${float(data[symbol]['price']):,.2f}")
@@ -67,15 +63,16 @@ async def get_stock_prices() -> dict:
     symbols = ",".join(STOCKS.keys())
     url = f"https://api.twelvedata.com/price?symbol={symbols}&apikey={TWELVE_API_KEY}"
     result = {}
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-            data = await resp.json()
-            for symbol in STOCKS.keys():
-                try:
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                data = await resp.json()
+                for symbol in STOCKS.keys():
                     if symbol in data and "price" in data[symbol]:
                         result[symbol] = float(data[symbol]["price"])
-                except Exception as e:
-                    logger.error(f"{symbol} xəta: {e}")
+                        logger.info(f"{symbol}: ${float(data[symbol]['price']):,.2f}")
+    except Exception as e:
+        logger.error(f"Səhm xəta: {e}")
     return result
 
 
@@ -84,7 +81,6 @@ async def check_crypto(bot: Bot):
     try:
         data = await get_crypto_prices()
         if not data:
-            logger.warning("Boş cavab, keçilir...")
             return
         for coin_id, info in COINS.items():
             if coin_id not in data:
@@ -98,17 +94,21 @@ async def check_crypto(bot: Bot):
             logger.info(f"{info['name']}: ${current:,.2f} (fərq: ${diff:+,.2f})")
             if abs(diff) >= info["threshold"]:
                 direction = "🚀 YUXARI" if diff > 0 else "📉 AŞAĞI"
-                msg = (
+                caption = (
                     f"⚠️ <b>{info['name']} Alerti!</b>\n\n"
                     f"{direction}\n"
                     f"💰 Qiymət: <b>${current:,.2f}</b>\n"
                     f"📊 Dəyişiklik: <b>${diff:+,.2f}</b>\n\n"
-                    f"#{info['symbol']} #Kripto #Alert"
+                    f"#BTC #Kripto #Alert"
                 )
-                await bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode="HTML")
+                chart = await generate_chart(info['name'], info['symbol'], current, diff, TWELVE_API_KEY)
+                if chart:
+                    await bot.send_photo(chat_id=CHAT_ID, photo=chart, caption=caption, parse_mode="HTML")
+                else:
+                    await bot.send_message(chat_id=CHAT_ID, text=caption, parse_mode="HTML")
                 last_crypto_prices[coin_id] = current
     except Exception as e:
-        logger.error(f"Kripto xəta: {e}")
+        logger.error(f"Kripto yoxlama xəta: {e}")
 
 
 async def check_stocks(bot: Bot):
@@ -126,17 +126,21 @@ async def check_stocks(bot: Bot):
             diff = current - last_stock_prices[symbol]
             if abs(diff) >= info["threshold"]:
                 direction = "🚀 YUXARI" if diff > 0 else "📉 AŞAĞI"
-                msg = (
+                caption = (
                     f"⚠️ <b>{info['name']} ({symbol}) Alerti!</b>\n\n"
                     f"{direction}\n"
                     f"💰 Qiymət: <b>${current:,.2f}</b>\n"
                     f"📊 Dəyişiklik: <b>${diff:+,.2f}</b>\n\n"
                     f"#{symbol} #Səhm #Alert"
                 )
-                await bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode="HTML")
+                chart = await generate_chart(info['name'], symbol, current, diff, TWELVE_API_KEY)
+                if chart:
+                    await bot.send_photo(chat_id=CHAT_ID, photo=chart, caption=caption, parse_mode="HTML")
+                else:
+                    await bot.send_message(chat_id=CHAT_ID, text=caption, parse_mode="HTML")
                 last_stock_prices[symbol] = current
     except Exception as e:
-        logger.error(f"Səhm xəta: {e}")
+        logger.error(f"Səhm yoxlama xəta: {e}")
 
 
 async def health(request):
@@ -158,7 +162,7 @@ async def main():
     while True:
         await check_crypto(bot)
         await check_stocks(bot)
-        await asyncio.sleep(60)
+        await asyncio.sleep(120)
 
 
 if __name__ == "__main__":
